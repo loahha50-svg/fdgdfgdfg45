@@ -1,6 +1,6 @@
 -- ============================================================
---  MM2 VALUE CALCULATOR (Supreme Values Live)
---  Автоматически подгружает цены с сайта
+--  MM2 LIVE VALUE CALCULATOR (Supreme Values)
+--  Автозагрузка цен, расчёт твоей выгоды
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -9,7 +9,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local HttpService = game:GetService("HttpService")
 
 -- ============================================================
---  ФУНКЦИЯ ДЛЯ HTTP ЗАПРОСОВ
+--  HTTP ЗАПРОС (для всех инжекторов)
 -- ============================================================
 local function httpRequest(url)
     local requestFn = syn and syn.request
@@ -317,7 +317,7 @@ task.spawn(function()
     else
         StatusLabel.Text = "Failed to load, using fallback"
         StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-        -- Запасной минимум
+        -- Минимальный запасной список, чтобы скрипт не падал
         VALUES = {
             ["gingerscope"] = 18500,
             ["travelersgun"] = 5600,
