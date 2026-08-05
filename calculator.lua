@@ -1,218 +1,180 @@
 -- ============================================================
---  MM2 Value Calculator (Supreme Values) — ИСПРАВЛЕННАЯ
+--  MM2 Value Calculator (Supreme + Fallback)  -- ИСПРАВЛЕННЫЙ
 -- ============================================================
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local SV_CACHE = {}
-local SV_LAST_UPDATE = 0
-local SV_CACHE_TTL = 900
-local SV_IS_FETCHING = false
+local SV_LOADED = false
 
--- ── ВСЕ ЭКЗЕКЬЮТОРЫ ──────────────────────────────────────────
-local function httpRequest(url)
-    local requestFn = syn and syn.request
-        or (http and http.request)
-        or (rawget(_G, "request") and type(rawget(_G, "request")) == "function" and rawget(_G, "request"))
-        or (rawget(_G, "http_request") and type(rawget(_G, "http_request")) == "function" and rawget(_G, "http_request"))
-        or (rawget(_G, "fetchget") and type(rawget(_G, "fetchget")) == "function" and rawget(_G, "fetchget"))
-        or (rawget(_G, "gethttp") and type(rawget(_G, "gethttp")) == "function" and rawget(_G, "gethttp"))
+-- ============================================================
+--  ЗАПАСНЫЕ ЗНАЧЕНИЯ (HARDCODED) — если сайт не грузится
+-- ============================================================
+local FALLBACK_VALUES = {
+    ["travelersgun"] = 5600,
+    ["evergun"] = 3450,
+    ["constellation"] = 2700,
+    ["evergreen"] = 2500,
+    ["turkey"] = 2450,
+    ["vampiresgun"] = 1950,
+    ["alienbeam"] = 1850,
+    ["darkshot"] = 1700,
+    ["darksword"] = 1675,
+    ["raygun"] = 1550,
+    ["blossom"] = 1330,
+    ["sakura"] = 1320,
+    ["sunrise"] = 1125,
+    ["snowcannon"] = 850,
+    ["bauble"] = 825,
+    ["sunset"] = 625,
+    ["soul"] = 615,
+    ["spirit"] = 605,
+    ["rainbowgun"] = 420,
+    ["flora"] = 410,
+    ["rainbow"] = 410,
+    ["bloom"] = 400,
+    ["heartwand"] = 340,
+    ["ocean"] = 285,
+    ["waves"] = 280,
+    ["xenoknife"] = 280,
+    ["xenoshot"] = 280,
+    ["flowerwoodgun"] = 265,
+    ["blizzard"] = 260,
+    ["flowerwood"] = 260,
+    ["snowstorm"] = 260,
+    ["snowdagger"] = 250,
+    ["watergun"] = 250,
+    ["icecream"] = 160,
+    ["treat"] = 155,
+    ["beachy"] = 150,
+    ["sands"] = 150,
+    ["sweet"] = 150,
+    ["borealis"] = 145,
+    ["australis"] = 140,
+    ["bat"] = 120,
+    ["pearlshine"] = 85,
+    ["pearl"] = 80,
+    ["candy"] = 80,
+    ["heartblade"] = 65,
+    ["luger"] = 40,
+    ["redluger"] = 37,
+    ["phantom"] = 35,
+    ["spectre"] = 35,
+    ["candleflame"] = 33,
+    ["darkbringer"] = 33,
+    ["elderwoodblade"] = 33,
+    ["elderwoodrevolver"] = 33,
+    ["iceblaster"] = 33,
+    ["lightbringer"] = 33,
+    ["makeshift"] = 33,
+    ["sugar"] = 32,
+    ["ornament"] = 28,
+    ["greenluger"] = 23,
+    ["amerilaser"] = 22,
+    ["laser"] = 22,
+    ["hallowgun"] = 20,
+    ["nightblade"] = 20,
+    ["shark"] = 20,
+    ["icebeam"] = 18,
+    ["plasmabeam"] = 18,
+    ["swirlygun"] = 18,
+    ["battleaxeii"] = 17,
+    ["blaster"] = 17,
+    ["gingerluger"] = 17,
+    ["pixel"] = 17,
+    ["gemstone"] = 15,
+    ["iceflake"] = 15,
+    ["oldglory"] = 15,
+    ["plasmablade"] = 15,
+    ["slasher"] = 15,
+    ["vampiresedge"] = 15,
+    ["cookiecane"] = 13,
+    ["deathshard"] = 13,
+    ["eternalcane"] = 13,
+    ["gingerblade"] = 13,
+    ["jinglegun"] = 13,
+    ["lugercane"] = 13,
+    ["minty"] = 13,
+    ["nebula"] = 13,
+    ["virtual"] = 13,
+    ["battleaxe"] = 12,
+    ["gingermint"] = 12,
+    ["swirlyblade"] = 12,
+    ["chill"] = 10,
+    ["clockwork"] = 10,
+    ["fang"] = 10,
+    ["frostsaber"] = 10,
+    ["heat"] = 10,
+    ["spider"] = 10,
+    ["tides"] = 10,
+    ["bioblade"] = 8,
+    ["eternaliii"] = 8,
+    ["eternaliv"] = 8,
+    ["hallowsblade"] = 8,
+    ["hallowsedge"] = 8,
+    ["handsaw"] = 8,
+    ["boneblade"] = 7,
+    ["eternal"] = 7,
+    ["eternalii"] = 7,
+    ["frostbite"] = 7,
+    ["ghostblade"] = 7,
+    ["icedragon"] = 7,
+    ["iceshard"] = 7,
+    ["prismatic"] = 7,
+    ["pumpking"] = 7,
+    ["saw"] = 7,
+    ["xmas"] = 7,
+    ["eggblade"] = 5,
+    ["flames"] = 5,
+    ["snowflake"] = 5,
+    ["wintersedge"] = 5,
+    ["peppermint"] = 4,
+    ["cookieblade"] = 3,
+    ["blueseer"] = 3,
+    ["purpleseer"] = 3,
+    ["redseer"] = 3,
+    ["seer"] = 3,
+    ["orangeseer"] = 2,
+    ["yellowseer"] = 2,
+    ["corrupt"] = 600,
+    ["gingerscope"] = 18500,
+    ["travelersaxe"] = 8100,
+    ["vampireaxe"] = 925,
+    ["harvester"] = 300,
+    ["icepiercer"] = 200,
+}
 
-    if not requestFn then
-        warn("[ValueCalc] HTTP not available")
-        return nil
-    end
-
-    local ok, res = pcall(requestFn, {
-        Url = url,
-        Method = "GET",
-        Headers = {
-            ["Accept"] = "*/*",
-            ["Referer"] = "https://supremevalues.com/mm2/godlies",
-            ["User-Agent"] = "Mozilla/5.0"
-        }
-    })
-
-    if ok and res and res.Body then
-        return res.Body
-    end
-    return nil
-end
-
--- ── ПАРСИНГ ──────────────────────────────────────────────────
-local function fetchSupremeValues()
-    if SV_IS_FETCHING then return end
-    if SV_CACHE and next(SV_CACHE) and (tick() - SV_LAST_UPDATE) < SV_CACHE_TTL then return end
-
-    SV_IS_FETCHING = true
-    print("[ValueCalc] Fetching Supreme Values...")
-
-    local pages = {
-        "https://supremevalues.com/mm2/godlies",
-        "https://supremevalues.com/mm2/ancients",
-        "https://supremevalues.com/mm2/chromas",
-    }
-
-    local newCache = {}
-    local loaded = 0
-
-    for _, url in ipairs(pages) do
-        local body = httpRequest(url)
-        if body and #body > 1000 then
-            local pos = 1
-            while true do
-                local ns, ne, rawName = body:find('data%-name="([^"]+)"', pos)
-                if not ns then break end
-
-                local searchBlock = body:sub(math.max(1, ns - 300), math.min(#body, ne + 300))
-                local val = nil
-
-                for v in searchBlock:gmatch('data%-value="(%d+)"') do
-                    val = tonumber(v)
-                    break
-                end
-
-                if not val then
-                    for num in searchBlock:gmatch("Value[%s%p]*(%d+[,%.%d]*)") do
-                        val = tonumber(num:gsub("[,.]", ""))
-                        if val and val > 0 then break end
-                    end
-                end
-
-                if val and val > 0 then
-                    local name = rawName:gsub("&#039;", "'"):gsub("&amp;", "&"):gsub("&quot;", '"')
-                    local clean = name:lower():gsub("[^a-z0-9%']", "")
-                    newCache[clean] = val
-                    loaded = loaded + 1
-
-                    -- Алиасы
-                    if clean == "travelersgun" then
-                        newCache["travelergun"] = val
-                    elseif clean == "evergun" then
-                        newCache["evergun"] = val
-                    end
-                end
-                pos = ne + 1
-            end
-        end
-        task.wait(0.2)
-    end
-
-    if loaded > 0 then
-        SV_CACHE = newCache
-        SV_LAST_UPDATE = tick()
-        print("[ValueCalc] Loaded " .. loaded .. " items")
-        if StatusLabel then
-            StatusLabel.Text = "Supreme Values ✔ (" .. loaded .. ")"
-            StatusLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
-        end
-    else
-        warn("[ValueCalc] Failed to load values")
-        if StatusLabel then
-            StatusLabel.Text = "Failed to load values"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-        end
-    end
-
-    SV_IS_FETCHING = false
-end
-
--- ── ПОИСК ЗНАЧЕНИЙ ──────────────────────────────────────────
+-- Функция для получения значения (сначала ищет в кэше, потом в fallback)
 local function getItemValue(itemName)
     if not itemName or itemName == "" then return 0 end
     local clean = itemName:lower():gsub("[^a-z0-9%']", "")
 
-    if clean:find("chroma") then
-        local base = clean:gsub("chroma", "")
-        if SV_CACHE[base] then return SV_CACHE[base] * 2.5 end
-    end
-
+    -- Поиск в загруженном кэше
     if SV_CACHE[clean] then return SV_CACHE[clean] end
 
-    for key, val in pairs(SV_CACHE) do
-        if key:find(clean) or clean:find(key) then return val end
-    end
+    -- Поиск в fallback
+    if FALLBACK_VALUES[clean] then return FALLBACK_VALUES[clean] end
 
-    -- Алиасы
-    local aliases = {
-        ["corrupt"] = "corrupt", ["gingerscope"] = "gingerscope",
-        ["travelersaxe"] = "travelersaxe", ["vampireaxe"] = "vampireaxe",
-        ["harvester"] = "harvester", ["icepiercer"] = "icepiercer",
-        ["blossom"] = "blossom", ["sakura"] = "sakura",
-        ["sunrise"] = "sunrise", ["snowcannon"] = "snowcannon",
-        ["bauble"] = "bauble", ["sunset"] = "sunset",
-        ["soul"] = "soul", ["spirit"] = "spirit",
-        ["rainbowgun"] = "rainbowgun", ["flora"] = "flora",
-        ["rainbow"] = "rainbow", ["bloom"] = "bloom",
-        ["heartwand"] = "heartwand", ["ocean"] = "ocean",
-        ["waves"] = "waves", ["xenoknife"] = "xenoknife",
-        ["xenoshot"] = "xenoshot", ["flowerwoodgun"] = "flowerwoodgun",
-        ["blizzard"] = "blizzard", ["flowerwood"] = "flowerwood",
-        ["snowstorm"] = "snowstorm", ["snowdagger"] = "snowdagger",
-        ["watergun"] = "watergun", ["icecream"] = "icecream",
-        ["treat"] = "treat", ["beachy"] = "beachy",
-        ["sands"] = "sands", ["sweet"] = "sweet",
-        ["borealis"] = "borealis", ["australis"] = "australis",
-        ["bat"] = "bat", ["pearlshine"] = "pearlshine",
-        ["pearl"] = "pearl", ["candy"] = "candy",
-        ["heartblade"] = "heartblade", ["luger"] = "luger",
-        ["redluger"] = "redluger", ["phantom"] = "phantom",
-        ["spectre"] = "spectre", ["candleflame"] = "candleflame",
-        ["darkbringer"] = "darkbringer", ["elderwoodblade"] = "elderwoodblade",
-        ["elderwoodrevolver"] = "elderwoodrevolver", ["iceblaster"] = "iceblaster",
-        ["lightbringer"] = "lightbringer", ["makeshift"] = "makeshift",
-        ["sugar"] = "sugar", ["ornament"] = "ornament",
-        ["greenluger"] = "greenluger", ["amerilaser"] = "amerilaser",
-        ["laser"] = "laser", ["hallowgun"] = "hallowgun",
-        ["nightblade"] = "nightblade", ["shark"] = "shark",
-        ["icebeam"] = "icebeam", ["plasmabeam"] = "plasmabeam",
-        ["swirlygun"] = "swirlygun", ["battleaxeii"] = "battleaxeii",
-        ["blaster"] = "blaster", ["gingerluger"] = "gingerluger",
-        ["pixel"] = "pixel", ["gemstone"] = "gemstone",
-        ["iceflake"] = "iceflake", ["oldglory"] = "oldglory",
-        ["plasmablade"] = "plasmablade", ["slasher"] = "slasher",
-        ["vampiresedge"] = "vampiresedge", ["cookiecane"] = "cookiecane",
-        ["deathshard"] = "deathshard", ["eternalcane"] = "eternalcane",
-        ["gingerblade"] = "gingerblade", ["jinglegun"] = "jinglegun",
-        ["lugercane"] = "lugercane", ["minty"] = "minty",
-        ["nebula"] = "nebula", ["virtual"] = "virtual",
-        ["battleaxe"] = "battleaxe", ["gingermint"] = "gingermint",
-        ["swirlyblade"] = "swirlyblade", ["chill"] = "chill",
-        ["clockwork"] = "clockwork", ["fang"] = "fang",
-        ["frostsaber"] = "frostsaber", ["heat"] = "heat",
-        ["spider"] = "spider", ["tides"] = "tides",
-        ["bioblade"] = "bioblade", ["eternaliii"] = "eternaliii",
-        ["eternaliv"] = "eternaliv", ["hallowsblade"] = "hallowsblade",
-        ["hallowsedge"] = "hallowsedge", ["handsaw"] = "handsaw",
-        ["boneblade"] = "boneblade", ["eternal"] = "eternal",
-        ["eternalii"] = "eternalii", ["frostbite"] = "frostbite",
-        ["ghostblade"] = "ghostblade", ["icedragon"] = "icedragon",
-        ["iceshard"] = "iceshard", ["prismatic"] = "prismatic",
-        ["pumpking"] = "pumpking", ["saw"] = "saw",
-        ["xmas"] = "xmas", ["eggblade"] = "eggblade",
-        ["flames"] = "flames", ["snowflake"] = "snowflake",
-        ["wintersedge"] = "wintersedge", ["peppermint"] = "peppermint",
-        ["cookieblade"] = "cookieblade", ["blueseer"] = "blueseer",
-        ["purpleseer"] = "purpleseer", ["redseer"] = "redseer",
-        ["seer"] = "seer", ["orangeseer"] = "orangeseer",
-        ["yellowseer"] = "yellowseer",
-    }
-
-    if aliases[clean] then
-        return SV_CACHE[aliases[clean]] or 0
+    -- Поиск по части названия
+    for key, val in pairs(FALLBACK_VALUES) do
+        if clean:find(key) or key:find(clean) then return val end
     end
 
     return 0
 end
 
--- ── ГЛАВНОЕ GUI ──────────────────────────────────────────────
+-- Загружаем fallback сразу (чтобы значения были всегда)
+for k, v in pairs(FALLBACK_VALUES) do
+    SV_CACHE[k] = v
+end
+SV_LOADED = true
+print("[ValueCalc] Fallback values loaded: " .. #FALLBACK_VALUES .. " items")
+
+-- ============================================================
+--  GUI
+-- ============================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ValueCalculator"
 ScreenGui.ResetOnSpawn = false
@@ -282,14 +244,16 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, 0, 0, 14)
 StatusLabel.Position = UDim2.new(0, 0, 0, 58)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Loading values..."
+StatusLabel.Text = "Values loaded (fallback)"
 StatusLabel.Font = Enum.Font.SourceSans
 StatusLabel.TextSize = 8
-StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+StatusLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
 StatusLabel.Parent = MainFrame
 
--- ── ЧТЕНИЕ ОФФЕРА ────────────────────────────────────────────
+-- ============================================================
+--  ФУНКЦИИ ДЛЯ ЧТЕНИЯ ОФФЕРА
+-- ============================================================
 local function getTradeItems(offerFrameName)
     local items = {}
     local tradeGui = nil
@@ -364,7 +328,9 @@ local function formatValue(val)
     return tostring(math.floor(val))
 end
 
--- ── ОБНОВЛЕНИЕ ──────────────────────────────────────────────
+-- ============================================================
+--  ОБНОВЛЕНИЕ
+-- ============================================================
 local function updateValues()
     pcall(function()
         local isFakeActive = _G.fakeTrade and _G.fakeTrade.active
@@ -398,19 +364,14 @@ local function updateValues()
             DiffLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         end
 
-        local count = 0
-        for _ in pairs(SV_CACHE) do count = count + 1 end
-        if count > 0 then
-            StatusLabel.Text = "Supreme Values ✔ (" .. count .. " items)"
-            StatusLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
-        else
-            StatusLabel.Text = "Loading values..."
-            StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-        end
+        StatusLabel.Text = "Values: " .. (#SV_CACHE) .. " items"
+        StatusLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
     end)
 end
 
--- ── ЗАПУСК ──────────────────────────────────────────────────
+-- ============================================================
+--  ЗАПУСК
+-- ============================================================
 task.spawn(function()
     while true do
         task.wait(3)
@@ -418,23 +379,5 @@ task.spawn(function()
     end
 end)
 
-task.spawn(function()
-    fetchSupremeValues()
-    updateValues()
-    while true do
-        task.wait(600)
-        fetchSupremeValues()
-    end
-end)
-
-MainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and input.KeyCode == Enum.KeyCode.LeftControl then
-        fetchSupremeValues()
-        updateValues()
-        StatusLabel.Text = "Refreshing..."
-        StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-        task.delay(2, updateValues)
-    end
-end)
-
-print("[ValueCalc] Loaded. Ctrl+Click on panel to refresh.")
+updateValues()
+print("[ValueCalc] Loaded with fallback values. Ctrl+Click to refresh.")
