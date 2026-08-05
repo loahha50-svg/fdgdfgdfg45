@@ -1,0 +1,339 @@
+-- ============================================================
+--  MM2 VALUE CALCULATOR (Supreme Values Live)
+--  Автоматически подгружает цены с сайта
+-- ============================================================
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local HttpService = game:GetService("HttpService")
+
+-- ============================================================
+--  ФУНКЦИЯ ДЛЯ HTTP ЗАПРОСОВ
+-- ============================================================
+local function httpRequest(url)
+    local requestFn = syn and syn.request
+        or (http and http.request)
+        or (rawget(_G, "request") and type(rawget(_G, "request")) == "function" and rawget(_G, "request"))
+        or (rawget(_G, "http_request") and type(rawget(_G, "http_request")) == "function" and rawget(_G, "http_request"))
+        or (rawget(_G, "fetchget") and type(rawget(_G, "fetchget")) == "function" and rawget(_G, "fetchget"))
+        or (rawget(_G, "gethttp") and type(rawget(_G, "gethttp")) == "function" and rawget(_G, "gethttp"))
+
+    if not requestFn then
+        warn("[MM2] HTTP not available")
+        return nil
+    end
+
+    local ok, res = pcall(requestFn, {
+        Url = url,
+        Method = "GET",
+        Headers = {
+            ["Accept"] = "*/*",
+            ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+    })
+
+    if ok and res and res.Body then
+        return res.Body
+    end
+    return nil
+end
+
+-- ============================================================
+--  ЗАГРУЗКА ЦЕН С SUPREME VALUES
+-- ============================================================
+local function fetchSupremeValues()
+    local pages = {
+        "https://supremevalues.com/mm2/godlies",
+        "https://supremevalues.com/mm2/ancients",
+        "https://supremevalues.com/mm2/chromas",
+    }
+
+    local cache = {}
+
+    for _, url in ipairs(pages) do
+        local body = httpRequest(url)
+        if body and #body > 1000 then
+            local pos = 1
+            while true do
+                local ns, ne, rawName = body:find('data%-name="([^"]+)"', pos)
+                if not ns then break end
+
+                local block = body:sub(math.max(1, ns - 300), math.min(#body, ne + 300))
+                local val = nil
+
+                for v in block:gmatch('data%-value="(%d+)"') do
+                    val = tonumber(v)
+                    break
+                end
+
+                if not val then
+                    for num in block:gmatch("Value[%s%p]*(%d+[,%.%d]*)") do
+                        val = tonumber(num:gsub("[,.]", ""))
+                        if val and val > 0 then break end
+                    end
+                end
+
+                if val and val > 0 then
+                    local name = rawName:gsub("&#039;", "'"):gsub("&amp;", "&")
+                    local clean = name:lower():gsub("[^a-z0-9%']", "")
+                    cache[clean] = val
+                end
+                pos = ne + 1
+            end
+        end
+        task.wait(0.2)
+    end
+
+    return cache
+end
+
+local VALUES = {}
+local LOADED = false
+
+-- ============================================================
+--  ПОИСК ЦЕНЫ
+-- ============================================================
+local function getItemValue(name)
+    if not name or name == "" then return 0 end
+    local clean = name:lower():gsub("[^a-z0-9%']", "")
+
+    if VALUES[clean] then return VALUES[clean] end
+
+    if clean:find("chroma") then
+        local base = clean:gsub("chroma", "")
+        if VALUES[base] then return VALUES[base] * 2.5 end
+    end
+
+    for key, val in pairs(VALUES) do
+        if clean:find(key) or key:find(clean) then return val end
+    end
+
+    return 0
+end
+
+-- ============================================================
+--  GUI
+-- ============================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MM2Values"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999
+ScreenGui.Parent = PlayerGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 210, 0, 72)
+MainFrame.Position = UDim2.new(0.5, -105, 0.8, -36)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+do
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = MainFrame
+    local s = Instance.new("UIStroke"); s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Color = Color3.fromRGB(150, 80, 255); s.Thickness = 1.5; s.Parent = MainFrame
+end
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 16)
+Title.Position = UDim2.new(0, 0, 0, 1)
+Title.BackgroundTransparency = 1
+Title.Text = "💰 MM2 Values (Supreme)"
+Title.Font = Enum.Font.FredokaOne
+Title.TextSize = 10
+Title.TextColor3 = Color3.fromRGB(200, 180, 255)
+Title.Parent = MainFrame
+
+local YourLabel = Instance.new("TextLabel")
+YourLabel.Size = UDim2.new(0.48, 0, 0, 16)
+YourLabel.Position = UDim2.new(0, 4, 0, 18)
+YourLabel.BackgroundTransparency = 1
+YourLabel.Text = "You: —"
+YourLabel.Font = Enum.Font.SourceSansBold
+YourLabel.TextSize = 11
+YourLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+YourLabel.TextXAlignment = Enum.TextXAlignment.Left
+YourLabel.Parent = MainFrame
+
+local TheirLabel = Instance.new("TextLabel")
+TheirLabel.Size = UDim2.new(0.48, 0, 0, 16)
+TheirLabel.Position = UDim2.new(0.52, 0, 0, 18)
+TheirLabel.BackgroundTransparency = 1
+TheirLabel.Text = "Them: —"
+TheirLabel.Font = Enum.Font.SourceSansBold
+TheirLabel.TextSize = 11
+TheirLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+TheirLabel.TextXAlignment = Enum.TextXAlignment.Left
+TheirLabel.Parent = MainFrame
+
+local DiffLabel = Instance.new("TextLabel")
+DiffLabel.Size = UDim2.new(1, 0, 0, 16)
+DiffLabel.Position = UDim2.new(0, 0, 0, 36)
+DiffLabel.BackgroundTransparency = 1
+DiffLabel.Text = "Profit: —"
+DiffLabel.Font = Enum.Font.SourceSansBold
+DiffLabel.TextSize = 11
+DiffLabel.TextColor3 = Color3.fromRGB(180, 255, 180)
+DiffLabel.TextXAlignment = Enum.TextXAlignment.Center
+DiffLabel.Parent = MainFrame
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 12)
+StatusLabel.Position = UDim2.new(0, 0, 0, 54)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Loading..."
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.TextSize = 8
+StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+StatusLabel.Parent = MainFrame
+
+-- ============================================================
+--  ЧТЕНИЕ ОФФЕРА
+-- ============================================================
+local function getTradeItems(side)
+    local items = {}
+    local tradeGui = nil
+    for _, gui in ipairs(PlayerGui:GetChildren()) do
+        if gui.Name == "TradeGUI" or gui.Name == "TradeGui" then
+            tradeGui = gui
+            break
+        end
+    end
+    if not tradeGui or not tradeGui.Enabled then return items end
+
+    local container = tradeGui:FindFirstChild("Container")
+    if not container or not container.Visible then return items end
+
+    local trade = container:FindFirstChild("Trade")
+    if not trade or not trade.Visible then return items end
+
+    local frame = trade:FindFirstChild(side)
+    if not frame then return items end
+
+    local slotContainer = frame:FindFirstChild("Container")
+    if not slotContainer then return items end
+
+    for i = 1, 4 do
+        local slot = slotContainer:FindFirstChild("NewItem" .. i)
+        if slot and slot.Visible then
+            local label = slot:FindFirstChild("Label", true)
+            if label and label:IsA("TextLabel") and label.Text ~= "" and label.Text ~= "Label" then
+                local amount = 1
+                local amtLabel = slot:FindFirstChild("Amount", true)
+                if amtLabel and amtLabel:IsA("TextLabel") then
+                    local n = amtLabel.Text:match("x(%d+)")
+                    if n then amount = tonumber(n) or 1 end
+                end
+                table.insert(items, { name = label.Text, amount = amount })
+            end
+        end
+    end
+    return items
+end
+
+local function getFakeItems(slots)
+    local items = {}
+    if not slots then return items end
+    for i = 1, 4 do
+        local slot = slots[i]
+        if slot then
+            local name = slot.Name or slot.DataID or slot.ItemName or ""
+            if name ~= "" and name ~= "NewItem" then
+                table.insert(items, { name = name, amount = slot.Amount or 1 })
+            end
+        end
+    end
+    return items
+end
+
+local function calcTotal(items)
+    local total = 0
+    for _, item in ipairs(items) do
+        local val = getItemValue(item.name)
+        total = total + (val * (item.amount or 1))
+    end
+    return total
+end
+
+local function fmt(v)
+    if v >= 1000000 then return string.format("%.1fM", v / 1000000) end
+    if v >= 1000 then return string.format("%.1fK", v / 1000) end
+    return tostring(math.floor(v))
+end
+
+-- ============================================================
+--  ОБНОВЛЕНИЕ
+-- ============================================================
+local function update()
+    pcall(function()
+        local isFake = _G.fakeTrade and _G.fakeTrade.active
+        local yourItems, theirItems
+
+        if isFake and _G.YourSlots and _G.TheirSlots then
+            yourItems = getFakeItems(_G.YourSlots)
+            theirItems = getFakeItems(_G.TheirSlots)
+        else
+            yourItems = getTradeItems("YourOffer")
+            theirItems = getTradeItems("TheirOffer")
+        end
+
+        local yourVal = calcTotal(yourItems)
+        local theirVal = calcTotal(theirItems)
+        local profit = theirVal - yourVal
+
+        YourLabel.Text = "You: " .. (yourVal > 0 and fmt(yourVal) or "—")
+        TheirLabel.Text = "Them: " .. (theirVal > 0 and fmt(theirVal) or "—")
+
+        if profit > 0 then
+            DiffLabel.Text = "✅ +" .. fmt(profit) .. " profit"
+            DiffLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        elseif profit < 0 then
+            DiffLabel.Text = "❌ " .. fmt(profit) .. " loss"
+            DiffLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        else
+            DiffLabel.Text = "⚖️ 0 (fair)"
+            DiffLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end)
+end
+
+-- ============================================================
+--  ЗАПУСК
+-- ============================================================
+task.spawn(function()
+    StatusLabel.Text = "Loading Supreme Values..."
+    StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+
+    local data = fetchSupremeValues()
+    if data and next(data) then
+        VALUES = data
+        LOADED = true
+        StatusLabel.Text = "Loaded: " .. #VALUES .. " items"
+        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    else
+        StatusLabel.Text = "Failed to load, using fallback"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        -- Запасной минимум
+        VALUES = {
+            ["gingerscope"] = 18500,
+            ["travelersgun"] = 5600,
+            ["evergun"] = 3450,
+            ["constellation"] = 2700,
+            ["evergreen"] = 2500,
+        }
+    end
+    update()
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        update()
+    end
+end)
+
+print("[MM2 Values] Loaded. Profit = Them - You (your gain).")
