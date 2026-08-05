@@ -1,107 +1,225 @@
 -- ============================================================
---  MM2 LIVE VALUE CALCULATOR (Supreme Values)
---  Автозагрузка цен, расчёт твоей выгоды
+--  MM2 VALUE CALCULATOR (с правильной выгодой)
+--  Все скины + Diff = твоя прибыль
 -- ============================================================
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local HttpService = game:GetService("HttpService")
 
--- ============================================================
---  HTTP ЗАПРОС (для всех инжекторов)
--- ============================================================
-local function httpRequest(url)
-    local requestFn = syn and syn.request
-        or (http and http.request)
-        or (rawget(_G, "request") and type(rawget(_G, "request")) == "function" and rawget(_G, "request"))
-        or (rawget(_G, "http_request") and type(rawget(_G, "http_request")) == "function" and rawget(_G, "http_request"))
-        or (rawget(_G, "fetchget") and type(rawget(_G, "fetchget")) == "function" and rawget(_G, "fetchget"))
-        or (rawget(_G, "gethttp") and type(rawget(_G, "gethttp")) == "function" and rawget(_G, "gethttp"))
+local VALUES = {
+    -- ANCIENTS
+    ["gingerscope"] = 18500,
+    ["travelersaxe"] = 8100,
+    ["celestial"] = 1725,
+    ["vampireaxe"] = 925,
+    ["harvester"] = 300,
+    ["icepiercer"] = 200,
 
-    if not requestFn then
-        warn("[MM2] HTTP not available")
-        return nil
-    end
+    -- TIER 4
+    ["travelersgun"] = 5600,
+    ["evergun"] = 3450,
+    ["constellation"] = 2700,
+    ["evergreen"] = 2500,
+    ["turkey"] = 2450,
+    ["vampiresgun"] = 1950,
+    ["alienbeam"] = 1850,
+    ["darkshot"] = 1700,
+    ["darksword"] = 1675,
+    ["raygun"] = 1550,
+    ["blossom"] = 1330,
+    ["sakura"] = 1320,
+    ["sunrise"] = 1125,
+    ["snowcannon"] = 850,
+    ["bauble"] = 825,
+    ["sunset"] = 625,
+    ["soul"] = 615,
+    ["spirit"] = 605,
+    ["rainbowgun"] = 420,
+    ["flora"] = 410,
+    ["rainbow"] = 410,
+    ["bloom"] = 400,
 
-    local ok, res = pcall(requestFn, {
-        Url = url,
-        Method = "GET",
-        Headers = {
-            ["Accept"] = "*/*",
-            ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-    })
+    -- TIER 3
+    ["heartwand"] = 340,
+    ["ocean"] = 285,
+    ["waves"] = 280,
+    ["xenoknife"] = 280,
+    ["xenoshot"] = 280,
+    ["flowerwoodgun"] = 265,
+    ["blizzard"] = 260,
+    ["flowerwood"] = 260,
+    ["snowstorm"] = 260,
+    ["snowdagger"] = 250,
+    ["watergun"] = 250,
+    ["icecream"] = 160,
+    ["treat"] = 155,
+    ["beachy"] = 150,
+    ["sands"] = 150,
+    ["sweet"] = 150,
+    ["borealis"] = 145,
+    ["australis"] = 140,
+    ["bat"] = 120,
+    ["pearlshine"] = 85,
+    ["pearl"] = 80,
+    ["candy"] = 80,
+    ["heartblade"] = 65,
 
-    if ok and res and res.Body then
-        return res.Body
-    end
-    return nil
-end
+    -- TIER 2
+    ["luger"] = 40,
+    ["redluger"] = 37,
+    ["phantom"] = 35,
+    ["spectre"] = 35,
+    ["candleflame"] = 33,
+    ["darkbringer"] = 33,
+    ["elderwoodblade"] = 33,
+    ["elderwoodrevolver"] = 33,
+    ["iceblaster"] = 33,
+    ["lightbringer"] = 33,
+    ["makeshift"] = 33,
+    ["sugar"] = 32,
+    ["ornament"] = 28,
+    ["greenluger"] = 23,
+    ["amerilaser"] = 22,
+    ["laser"] = 22,
+    ["hallowgun"] = 20,
+    ["nightblade"] = 20,
+    ["shark"] = 20,
 
--- ============================================================
---  ЗАГРУЗКА ЦЕН С SUPREME VALUES
--- ============================================================
-local function fetchSupremeValues()
-    local pages = {
-        "https://supremevalues.com/mm2/godlies",
-        "https://supremevalues.com/mm2/ancients",
-        "https://supremevalues.com/mm2/chromas",
-    }
+    -- TIER 1
+    ["icebeam"] = 18,
+    ["plasmabeam"] = 18,
+    ["swirlygun"] = 18,
+    ["battleaxeii"] = 17,
+    ["blaster"] = 17,
+    ["gingerluger"] = 17,
+    ["pixel"] = 17,
+    ["gemstone"] = 15,
+    ["iceflake"] = 15,
+    ["oldglory"] = 15,
+    ["plasmablade"] = 15,
+    ["slasher"] = 15,
+    ["vampiresedge"] = 15,
+    ["cookiecane"] = 13,
+    ["deathshard"] = 13,
+    ["eternalcane"] = 13,
+    ["gingerblade"] = 13,
+    ["jinglegun"] = 13,
+    ["lugercane"] = 13,
+    ["minty"] = 13,
+    ["nebula"] = 13,
+    ["virtual"] = 13,
 
-    local cache = {}
+    -- TIER 0 + VINTAGE
+    ["battleaxe"] = 12,
+    ["gingermint"] = 12,
+    ["swirlyblade"] = 12,
+    ["chill"] = 10,
+    ["clockwork"] = 10,
+    ["fang"] = 10,
+    ["frostsaber"] = 10,
+    ["heat"] = 10,
+    ["spider"] = 10,
+    ["tides"] = 10,
+    ["bioblade"] = 8,
+    ["eternaliii"] = 8,
+    ["eternaliv"] = 8,
+    ["hallowsblade"] = 8,
+    ["hallowsedge"] = 8,
+    ["handsaw"] = 8,
+    ["boneblade"] = 7,
+    ["eternal"] = 7,
+    ["eternalii"] = 7,
+    ["frostbite"] = 7,
+    ["ghostblade"] = 7,
+    ["icedragon"] = 7,
+    ["iceshard"] = 7,
+    ["prismatic"] = 7,
+    ["pumpking"] = 7,
+    ["saw"] = 7,
+    ["xmas"] = 7,
+    ["eggblade"] = 5,
+    ["flames"] = 5,
+    ["snowflake"] = 5,
+    ["wintersedge"] = 5,
+    ["peppermint"] = 4,
+    ["cookieblade"] = 3,
+    ["blueseer"] = 3,
+    ["purpleseer"] = 3,
+    ["redseer"] = 3,
+    ["seer"] = 3,
+    ["orangeseer"] = 2,
+    ["yellowseer"] = 2,
+    ["blue"] = 3,
+    ["orange"] = 2,
+    ["purple"] = 3,
+    ["red"] = 3,
+    ["yellow"] = 2,
 
-    for _, url in ipairs(pages) do
-        local body = httpRequest(url)
-        if body and #body > 1000 then
-            local pos = 1
-            while true do
-                local ns, ne, rawName = body:find('data%-name="([^"]+)"', pos)
-                if not ns then break end
+    -- CHROMAS
+    ["chromatravelersgun"] = 225000,
+    ["chromaevergun"] = 78000,
+    ["chromaevergreen"] = 60000,
+    ["chromabauble"] = 38000,
+    ["chromaconstellation"] = 36000,
+    ["chromavampiresgun"] = 35000,
+    ["chromaalienbeam"] = 30000,
+    ["chromaraygun"] = 15000,
+    ["chromasunrise"] = 11250,
+    ["chromasnowcannon"] = 8500,
+    ["chromablizzard"] = 8000,
+    ["chromasunset"] = 6500,
+    ["chromasnowdagger"] = 5750,
+    ["chromatreat"] = 4850,
+    ["chromaheartwand"] = 4750,
+    ["chromasnowstorm"] = 4250,
+    ["chromawatergun"] = 3400,
+    ["chromasweet"] = 2850,
+    ["chromaornament"] = 2700,
+    ["chromacandleflame"] = 200,
+    ["chromacorrupt"] = 180,
+    ["chromadarkbringer"] = 180,
+    ["chromalightbringer"] = 180,
+    ["chromaluger"] = 180,
+    ["chromamakeshift"] = 180,
+    ["chromaeternal"] = 120,
+    ["chromaeternalii"] = 120,
+    ["chromaeternaliii"] = 120,
+    ["chromaeternaliv"] = 120,
+    ["chromafang"] = 120,
+    ["chromagemstone"] = 120,
+    ["chromaghostblade"] = 120,
+    ["chromagreenluger"] = 120,
+    ["chromaheat"] = 120,
+    ["chromalaser"] = 120,
+    ["chromaminty"] = 120,
+    ["chromaoldglory"] = 120,
+    ["chromaphantom"] = 120,
+    ["chromapixel"] = 120,
+    ["chromaplasmablade"] = 120,
+    ["chromaplasmabeam"] = 120,
+    ["chromapumpking"] = 120,
+    ["chromaredluger"] = 120,
+    ["chromaseer"] = 120,
+    ["chromashark"] = 120,
+    ["chromaslasher"] = 120,
+    ["chromaspectre"] = 120,
+    ["chromasugar"] = 120,
+    ["chromatides"] = 120,
+    ["chromaxmas"] = 120,
 
-                local block = body:sub(math.max(1, ns - 300), math.min(#body, ne + 300))
-                local val = nil
+    -- VINTAGE (дополнительные)
+    ["corrupt"] = 600,
+}
 
-                for v in block:gmatch('data%-value="(%d+)"') do
-                    val = tonumber(v)
-                    break
-                end
-
-                if not val then
-                    for num in block:gmatch("Value[%s%p]*(%d+[,%.%d]*)") do
-                        val = tonumber(num:gsub("[,.]", ""))
-                        if val and val > 0 then break end
-                    end
-                end
-
-                if val and val > 0 then
-                    local name = rawName:gsub("&#039;", "'"):gsub("&amp;", "&")
-                    local clean = name:lower():gsub("[^a-z0-9%']", "")
-                    cache[clean] = val
-                end
-                pos = ne + 1
-            end
-        end
-        task.wait(0.2)
-    end
-
-    return cache
-end
-
-local VALUES = {}
-local LOADED = false
-
--- ============================================================
---  ПОИСК ЦЕНЫ
--- ============================================================
 local function getItemValue(name)
     if not name or name == "" then return 0 end
-    local clean = name:lower():gsub("[^a-z0-9%']", "")
+    local clean = name:lower():gsub("[^a-z0-9]", "")
 
     if VALUES[clean] then return VALUES[clean] end
 
-    if clean:find("chroma") then
-        local base = clean:gsub("chroma", "")
+    if string.sub(clean, 1, 6) == "chroma" then
+        local base = string.sub(clean, 7)
         if VALUES[base] then return VALUES[base] * 2.5 end
     end
 
@@ -112,9 +230,7 @@ local function getItemValue(name)
     return 0
 end
 
--- ============================================================
---  GUI
--- ============================================================
+-- GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MM2Values"
 ScreenGui.ResetOnSpawn = false
@@ -141,7 +257,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 16)
 Title.Position = UDim2.new(0, 0, 0, 1)
 Title.BackgroundTransparency = 1
-Title.Text = "💰 MM2 Values (Supreme)"
+Title.Text = "💰 MM2 Values (Your Profit)"
 Title.Font = Enum.Font.FredokaOne
 Title.TextSize = 10
 Title.TextColor3 = Color3.fromRGB(200, 180, 255)
@@ -184,16 +300,14 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, 0, 0, 12)
 StatusLabel.Position = UDim2.new(0, 0, 0, 54)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Loading..."
+StatusLabel.Text = "Ready"
 StatusLabel.Font = Enum.Font.SourceSans
 StatusLabel.TextSize = 8
-StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+StatusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
 StatusLabel.Parent = MainFrame
 
--- ============================================================
---  ЧТЕНИЕ ОФФЕРА
--- ============================================================
+-- Функции чтения
 local function getTradeItems(side)
     local items = {}
     local tradeGui = nil
@@ -265,9 +379,7 @@ local function fmt(v)
     return tostring(math.floor(v))
 end
 
--- ============================================================
---  ОБНОВЛЕНИЕ
--- ============================================================
+-- ОБНОВЛЕНИЕ (правильный расчёт выгоды)
 local function update()
     pcall(function()
         local isFake = _G.fakeTrade and _G.fakeTrade.active
@@ -283,7 +395,7 @@ local function update()
 
         local yourVal = calcTotal(yourItems)
         local theirVal = calcTotal(theirItems)
-        local profit = theirVal - yourVal
+        local profit = theirVal - yourVal  -- ТВОЯ ВЫГОДА
 
         YourLabel.Text = "You: " .. (yourVal > 0 and fmt(yourVal) or "—")
         TheirLabel.Text = "Them: " .. (theirVal > 0 and fmt(theirVal) or "—")
@@ -301,39 +413,13 @@ local function update()
     end)
 end
 
--- ============================================================
---  ЗАПУСК
--- ============================================================
-task.spawn(function()
-    StatusLabel.Text = "Loading Supreme Values..."
-    StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-
-    local data = fetchSupremeValues()
-    if data and next(data) then
-        VALUES = data
-        LOADED = true
-        StatusLabel.Text = "Loaded: " .. #VALUES .. " items"
-        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-    else
-        StatusLabel.Text = "Failed to load, using fallback"
-        StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-        -- Минимальный запасной список, чтобы скрипт не падал
-        VALUES = {
-            ["gingerscope"] = 18500,
-            ["travelersgun"] = 5600,
-            ["evergun"] = 3450,
-            ["constellation"] = 2700,
-            ["evergreen"] = 2500,
-        }
-    end
-    update()
-end)
-
+-- ЗАПУСК
 task.spawn(function()
     while true do
-        task.wait(5)
+        task.wait(2)
         update()
     end
 end)
 
+update()
 print("[MM2 Values] Loaded. Profit = Them - You (your gain).")
