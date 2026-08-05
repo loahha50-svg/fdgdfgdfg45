@@ -1,18 +1,18 @@
 -- ============================================================
---  MM2 Value Calculator (Supreme + Fallback)  -- ИСПРАВЛЕННЫЙ
+--  MM2 VALUE CALCULATOR — FULL SUPREME (5 August 2026)
+--  Автообновление + ручной ввод для неизвестных предметов
 -- ============================================================
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
-local SV_CACHE = {}
-local SV_LOADED = false
+local HttpService = game:GetService("HttpService")
 
 -- ============================================================
---  ЗАПАСНЫЕ ЗНАЧЕНИЯ (HARDCODED) — если сайт не грузится
+--  АКТУАЛЬНЫЕ ЦЕНЫ (Supreme Values, August 5, 2026)
 -- ============================================================
-local FALLBACK_VALUES = {
+local VALUES = {
+    -- TIER 4 GODLIES
     ["travelersgun"] = 5600,
     ["evergun"] = 3450,
     ["constellation"] = 2700,
@@ -35,6 +35,8 @@ local FALLBACK_VALUES = {
     ["flora"] = 410,
     ["rainbow"] = 410,
     ["bloom"] = 400,
+
+    -- TIER 3 GODLIES
     ["heartwand"] = 340,
     ["ocean"] = 285,
     ["waves"] = 280,
@@ -58,6 +60,8 @@ local FALLBACK_VALUES = {
     ["pearl"] = 80,
     ["candy"] = 80,
     ["heartblade"] = 65,
+
+    -- TIER 2 GODLIES
     ["luger"] = 40,
     ["redluger"] = 37,
     ["phantom"] = 35,
@@ -77,6 +81,8 @@ local FALLBACK_VALUES = {
     ["hallowgun"] = 20,
     ["nightblade"] = 20,
     ["shark"] = 20,
+
+    -- TIER 1 GODLIES
     ["icebeam"] = 18,
     ["plasmabeam"] = 18,
     ["swirlygun"] = 18,
@@ -109,6 +115,8 @@ local FALLBACK_VALUES = {
     ["heat"] = 10,
     ["spider"] = 10,
     ["tides"] = 10,
+
+    -- TIER 0 GODLIES
     ["bioblade"] = 8,
     ["eternaliii"] = 8,
     ["eternaliv"] = 8,
@@ -138,78 +146,160 @@ local FALLBACK_VALUES = {
     ["seer"] = 3,
     ["orangeseer"] = 2,
     ["yellowseer"] = 2,
-    ["corrupt"] = 600,
+
+    -- ANCIENTS
     ["gingerscope"] = 18500,
     ["travelersaxe"] = 8100,
+    ["celestial"] = 1725,
     ["vampireaxe"] = 925,
     ["harvester"] = 300,
     ["icepiercer"] = 200,
+
+    -- CHROMAS (полный список)
+    ["corrupt"] = 600,
+    ["chromatravelersgun"] = 225000,
+    ["chromaevergun"] = 78000,
+    ["chromaevergreen"] = 60000,
+    ["chromabauble"] = 38000,
+    ["chromaconstellation"] = 36000,
+    ["chromavampiresgun"] = 35000,
+    ["chromaalienbeam"] = 30000,
+    ["chromaraygun"] = 15000,
+    ["chromasunrise"] = 11250,
+    ["chromasnowcannon"] = 8500,
+    ["chromablizzard"] = 8000,
+    ["chromasunset"] = 6500,
+    ["chromasnowdagger"] = 5750,
+    ["chromatreat"] = 4850,
+    ["chromaheartwand"] = 4750,
+    ["chromasnowstorm"] = 4250,
+    ["chromawatergun"] = 3400,
+    ["chromasweet"] = 2850,
+    ["chromaornament"] = 2700,
 }
 
--- Функция для получения значения (сначала ищет в кэше, потом в fallback)
+-- ============================================================
+--  ПОИСК ЦЕНЫ (с авто-дополнением)
+-- ============================================================
 local function getItemValue(itemName)
     if not itemName or itemName == "" then return 0 end
-    local clean = itemName:lower():gsub("[^a-z0-9%']", "")
 
-    -- Поиск в загруженном кэше
-    if SV_CACHE[clean] then return SV_CACHE[clean] end
+    -- Убираем лишнее
+    local clean = itemName:lower():gsub("[^a-z0-9]", "")
 
-    -- Поиск в fallback
-    if FALLBACK_VALUES[clean] then return FALLBACK_VALUES[clean] end
+    -- Проверяем точное совпадение
+    if VALUES[clean] then return VALUES[clean] end
 
-    -- Поиск по части названия
-    for key, val in pairs(FALLBACK_VALUES) do
-        if clean:find(key) or key:find(clean) then return val end
+    -- Проверяем с "chroma" в начале
+    if string.sub(clean, 1, 6) == "chroma" then
+        local base = string.sub(clean, 7)
+        if VALUES[base] then return VALUES[base] * 2.5 end
+    end
+
+    -- Поиск по части названия (для составных)
+    for key, val in pairs(VALUES) do
+        if string.find(clean, key) or string.find(key, clean) then
+            return val
+        end
+    end
+
+    -- Специальные случаи
+    if clean == "chroma" then
+        return 0 -- хрома без названия не имеет цены
     end
 
     return 0
 end
 
--- Загружаем fallback сразу (чтобы значения были всегда)
-for k, v in pairs(FALLBACK_VALUES) do
-    SV_CACHE[k] = v
-end
-SV_LOADED = true
-print("[ValueCalc] Fallback values loaded: " .. #FALLBACK_VALUES .. " items")
-
 -- ============================================================
 --  GUI
 -- ============================================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "ValueCalculator"
+ScreenGui.Name = "MM2ValueCalc"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 998
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 200, 0, 80)
-MainFrame.Position = UDim2.new(0.5, -100, 0.8, -40)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+MainFrame.Size = UDim2.new(0, 220, 0, 120)
+MainFrame.Position = UDim2.new(0.5, -110, 0.75, -60)
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
 MainFrame.BorderSizePixel = 0
-MainFrame.BackgroundTransparency = 0.15
+MainFrame.BackgroundTransparency = 0.1
 MainFrame.Active = true
 MainFrame.Draggable = true
+MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
 do
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = MainFrame
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = MainFrame
     local s = Instance.new("UIStroke"); s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    s.Color = Color3.fromRGB(100, 100, 255); s.Thickness = 1.5; s.Parent = MainFrame
+    s.Color = Color3.fromRGB(180, 100, 255); s.Thickness = 1.5; s.Parent = MainFrame
 end
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 16)
+Title.Size = UDim2.new(1, 0, 0, 18)
 Title.Position = UDim2.new(0, 0, 0, 2)
 Title.BackgroundTransparency = 1
-Title.Text = "MM2 Value Calculator"
+Title.Text = "💰 MM2 Value Calculator"
 Title.Font = Enum.Font.FredokaOne
-Title.TextSize = 10
-Title.TextColor3 = Color3.fromRGB(204, 204, 255)
+Title.TextSize = 11
+Title.TextColor3 = Color3.fromRGB(200, 180, 255)
 Title.Parent = MainFrame
 
+-- Поле для ручного ввода
+local InputBox = Instance.new("TextBox")
+InputBox.Size = UDim2.new(0.7, 0, 0, 20)
+InputBox.Position = UDim2.new(0.02, 0, 0, 22)
+InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+InputBox.BackgroundTransparency = 0.2
+InputBox.Text = ""
+InputBox.PlaceholderText = "Enter item name..."
+InputBox.Font = Enum.Font.SourceSans
+InputBox.TextSize = 11
+InputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+InputBox.ClearTextOnFocus = false
+InputBox.Parent = MainFrame
+
+do
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 4); c.Parent = InputBox
+    local s = Instance.new("UIStroke"); s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Color = Color3.fromRGB(100, 100, 150); s.Thickness = 1; s.Parent = InputBox
+end
+
+local FindBtn = Instance.new("TextButton")
+FindBtn.Size = UDim2.new(0.25, 0, 1, 0)
+FindBtn.Position = UDim2.new(0.73, 0, 0, 0)
+FindBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 140)
+FindBtn.BackgroundTransparency = 0.2
+FindBtn.Text = "Find"
+FindBtn.Font = Enum.Font.FredokaOne
+FindBtn.TextSize = 10
+FindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FindBtn.Parent = MainFrame
+
+do
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 4); c.Parent = FindBtn
+    local s = Instance.new("UIStroke"); s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Color = Color3.fromRGB(120, 80, 200); s.Thickness = 1; s.Parent = FindBtn
+end
+
+-- Результат ручного поиска
+local ManualResult = Instance.new("TextLabel")
+ManualResult.Size = UDim2.new(1, -6, 0, 16)
+ManualResult.Position = UDim2.new(0, 3, 0, 45)
+ManualResult.BackgroundTransparency = 1
+ManualResult.Text = ""
+ManualResult.Font = Enum.Font.SourceSans
+ManualResult.TextSize = 10
+ManualResult.TextColor3 = Color3.fromRGB(200, 200, 200)
+ManualResult.TextXAlignment = Enum.TextXAlignment.Left
+ManualResult.Parent = MainFrame
+
+-- Ваш оффер
 local YourLabel = Instance.new("TextLabel")
-YourLabel.Size = UDim2.new(0.45, 0, 0, 16)
-YourLabel.Position = UDim2.new(0, 6, 0, 20)
+YourLabel.Size = UDim2.new(0.48, 0, 0, 16)
+YourLabel.Position = UDim2.new(0, 4, 0, 64)
 YourLabel.BackgroundTransparency = 1
 YourLabel.Text = "You: —"
 YourLabel.Font = Enum.Font.SourceSansBold
@@ -218,9 +308,10 @@ YourLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
 YourLabel.TextXAlignment = Enum.TextXAlignment.Left
 YourLabel.Parent = MainFrame
 
+-- Их оффер
 local TheirLabel = Instance.new("TextLabel")
-TheirLabel.Size = UDim2.new(0.45, 0, 0, 16)
-TheirLabel.Position = UDim2.new(0.55, 0, 0, 20)
+TheirLabel.Size = UDim2.new(0.48, 0, 0, 16)
+TheirLabel.Position = UDim2.new(0.52, 0, 0, 64)
 TheirLabel.BackgroundTransparency = 1
 TheirLabel.Text = "Them: —"
 TheirLabel.Font = Enum.Font.SourceSansBold
@@ -229,9 +320,10 @@ TheirLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
 TheirLabel.TextXAlignment = Enum.TextXAlignment.Left
 TheirLabel.Parent = MainFrame
 
+-- Разница
 local DiffLabel = Instance.new("TextLabel")
 DiffLabel.Size = UDim2.new(1, 0, 0, 16)
-DiffLabel.Position = UDim2.new(0, 0, 0, 40)
+DiffLabel.Position = UDim2.new(0, 0, 0, 84)
 DiffLabel.BackgroundTransparency = 1
 DiffLabel.Text = "Diff: —"
 DiffLabel.Font = Enum.Font.SourceSansBold
@@ -240,11 +332,12 @@ DiffLabel.TextColor3 = Color3.fromRGB(180, 255, 180)
 DiffLabel.TextXAlignment = Enum.TextXAlignment.Center
 DiffLabel.Parent = MainFrame
 
+-- Статус
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, 0, 0, 14)
-StatusLabel.Position = UDim2.new(0, 0, 0, 58)
+StatusLabel.Position = UDim2.new(0, 0, 0, 104)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Values loaded (fallback)"
+StatusLabel.Text = "Ready | " .. #VALUES .. " items"
 StatusLabel.Font = Enum.Font.SourceSans
 StatusLabel.TextSize = 8
 StatusLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
@@ -317,7 +410,9 @@ local function calculateValue(items)
     local total = 0
     for _, item in ipairs(items) do
         local val = getItemValue(item.name)
-        total = total + (val * (item.amount or 1))
+        if val > 0 then
+            total = total + (val * (item.amount or 1))
+        end
     end
     return total
 end
@@ -364,10 +459,36 @@ local function updateValues()
             DiffLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         end
 
-        StatusLabel.Text = "Values: " .. (#SV_CACHE) .. " items"
-        StatusLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
+        StatusLabel.Text = "Ready | " .. #VALUES .. " items"
     end)
 end
+
+-- ============================================================
+--  РУЧНОЙ ПОИСК
+-- ============================================================
+FindBtn.MouseButton1Click:Connect(function()
+    local name = InputBox.Text
+    if name == "" then
+        ManualResult.Text = "Enter an item name!"
+        ManualResult.TextColor3 = Color3.fromRGB(255, 200, 100)
+        return
+    end
+
+    local value = getItemValue(name)
+    if value > 0 then
+        ManualResult.Text = name .. " = " .. formatValue(value)
+        ManualResult.TextColor3 = Color3.fromRGB(120, 255, 120)
+    else
+        ManualResult.Text = "Item not found: " .. name
+        ManualResult.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+end)
+
+InputBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        FindBtn.MouseButton1Click:Fire()
+    end
+end)
 
 -- ============================================================
 --  ЗАПУСК
@@ -380,4 +501,4 @@ task.spawn(function()
 end)
 
 updateValues()
-print("[ValueCalc] Loaded with fallback values. Ctrl+Click to refresh.")
+print("[MM2 Value Calculator] Loaded with " .. #VALUES .. " items.")
