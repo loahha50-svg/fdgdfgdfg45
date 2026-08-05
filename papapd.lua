@@ -1,6 +1,6 @@
 -- ============================================================
---  MM2 VALUE CALCULATOR — FULL SUPREME (5 August 2026)
---  Автообновление + ручной ввод для неизвестных предметов
+--  MM2 Live Value Calculator (Supreme Values)
+--  Автообновление каждые 2 секунды
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -8,10 +8,11 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local HttpService = game:GetService("HttpService")
 
--- ============================================================
---  АКТУАЛЬНЫЕ ЦЕНЫ (Supreme Values, August 5, 2026)
--- ============================================================
-local VALUES = {
+local CACHE = {}
+local LAST_UPDATE = 0
+local TTL = 900 -- 15 минут
+local FETCHING = false
+local FALLBACK = {
     -- TIER 4 GODLIES
     ["travelersgun"] = 5600,
     ["evergun"] = 3450,
@@ -35,7 +36,6 @@ local VALUES = {
     ["flora"] = 410,
     ["rainbow"] = 410,
     ["bloom"] = 400,
-
     -- TIER 3 GODLIES
     ["heartwand"] = 340,
     ["ocean"] = 285,
@@ -60,7 +60,6 @@ local VALUES = {
     ["pearl"] = 80,
     ["candy"] = 80,
     ["heartblade"] = 65,
-
     -- TIER 2 GODLIES
     ["luger"] = 40,
     ["redluger"] = 37,
@@ -81,7 +80,6 @@ local VALUES = {
     ["hallowgun"] = 20,
     ["nightblade"] = 20,
     ["shark"] = 20,
-
     -- TIER 1 GODLIES
     ["icebeam"] = 18,
     ["plasmabeam"] = 18,
@@ -115,7 +113,6 @@ local VALUES = {
     ["heat"] = 10,
     ["spider"] = 10,
     ["tides"] = 10,
-
     -- TIER 0 GODLIES
     ["bioblade"] = 8,
     ["eternaliii"] = 8,
@@ -146,7 +143,6 @@ local VALUES = {
     ["seer"] = 3,
     ["orangeseer"] = 2,
     ["yellowseer"] = 2,
-
     -- ANCIENTS
     ["gingerscope"] = 18500,
     ["travelersaxe"] = 8100,
@@ -154,8 +150,7 @@ local VALUES = {
     ["vampireaxe"] = 925,
     ["harvester"] = 300,
     ["icepiercer"] = 200,
-
-    -- CHROMAS (полный список)
+    -- CHROMAS
     ["corrupt"] = 600,
     ["chromatravelersgun"] = 225000,
     ["chromaevergun"] = 78000,
@@ -178,42 +173,96 @@ local VALUES = {
     ["chromaornament"] = 2700,
 }
 
--- ============================================================
---  ПОИСК ЦЕНЫ (с авто-дополнением)
--- ============================================================
-local function getItemValue(itemName)
-    if not itemName or itemName == "" then return 0 end
+-- ── HTTP ──────────────────────────────────────────────────────
+local function httpRequest(url)
+    local fn = syn and syn.request
+        or (http and http.request)
+        or (rawget(_G, "request") and type(rawget(_G, "request")) == "function" and rawget(_G, "request"))
+        or (rawget(_G, "http_request") and type(rawget(_G, "http_request")) == "function" and rawget(_G, "http_request"))
+        or (rawget(_G, "fetchget") and type(rawget(_G, "fetchget")) == "function" and rawget(_G, "fetchget"))
+        or (rawget(_G, "gethttp") and type(rawget(_G, "gethttp")) == "function" and rawget(_G, "gethttp"))
+    if not fn then return nil end
+    local ok, res = pcall(fn, { Url = url, Method = "GET", Headers = { ["Accept"] = "*/*", ["User-Agent"] = "Mozilla/5.0" } })
+    if ok and res and res.Body then return res.Body end
+    return nil
+end
 
-    -- Убираем лишнее
-    local clean = itemName:lower():gsub("[^a-z0-9]", "")
-
-    -- Проверяем точное совпадение
-    if VALUES[clean] then return VALUES[clean] end
-
-    -- Проверяем с "chroma" в начале
-    if string.sub(clean, 1, 6) == "chroma" then
-        local base = string.sub(clean, 7)
-        if VALUES[base] then return VALUES[base] * 2.5 end
+-- ── ЗАГРУЗКА ЦЕН С САЙТА ──────────────────────────────────
+local function fetchSupremeValues()
+    if FETCHING then return end
+    if CACHE and next(CACHE) and (tick() - LAST_UPDATE) < TTL then return end
+    FETCHING = true
+    local pages = {
+        "https://supremevalues.com/mm2/godlies",
+        "https://supremevalues.com/mm2/ancients",
+        "https://supremevalues.com/mm2/chromas",
+    }
+    local newCache = {}
+    local loaded = 0
+    for _, url in ipairs(pages) do
+        local body = httpRequest(url)
+        if body and #body > 1000 then
+            local pos = 1
+            while true do
+                local ns, ne, rawName = body:find('data%-name="([^"]+)"', pos)
+                if not ns then break
+                local block = body:sub(math.max(1, ns - 300), math.min(#body, ne + 300))
+                local val = nil
+                for v in block:gmatch('data%-value="(%d+)"') do val = tonumber(v); break end
+                if not val then
+                    for num in block:gmatch("Value[%s%p]*(%d+[,%.%d]*)") do
+                        val = tonumber(num:gsub("[,.]", ""))
+                        if val and val > 0 then break end
+                    end
+                end
+                if val and val > 0 then
+                    local name = rawName:gsub("&#039;", "'"):gsub("&amp;", "&")
+                    local clean = name:lower():gsub("[^a-z0-9%']", "")
+                    newCache[clean] = val
+                    loaded = loaded + 1
+                end
+                pos = ne + 1
+            end
+        end
+        task.wait(0.2)
     end
-
-    -- Поиск по части названия (для составных)
-    for key, val in pairs(VALUES) do
-        if string.find(clean, key) or string.find(key, clean) then
-            return val
+    if loaded > 0 then
+        CACHE = newCache
+        LAST_UPDATE = tick()
+        if StatusLabel then
+            StatusLabel.Text = "SV: " .. loaded .. " items"
+            StatusLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
+        end
+    else
+        if StatusLabel then
+            StatusLabel.Text = "Using fallback values"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
         end
     end
+    FETCHING = false
+end
 
-    -- Специальные случаи
-    if clean == "chroma" then
-        return 0 -- хрома без названия не имеет цены
+-- ── ПОИСК ЦЕНЫ ──────────────────────────────────────────────
+local function getItemValue(itemName)
+    if not itemName or itemName == "" then return 0 end
+    local clean = itemName:lower():gsub("[^a-z0-9%']", "")
+    if clean:find("chroma") then
+        local base = clean:gsub("chroma", "")
+        if CACHE[base] then return CACHE[base] * 2.5 end
+        if FALLBACK[base] then return FALLBACK[base] * 2.5 end
     end
-
+    if CACHE[clean] then return CACHE[clean] end
+    if FALLBACK[clean] then return FALLBACK[clean] end
+    for key, val in pairs(CACHE) do
+        if clean:find(key) or key:find(clean) then return val end
+    end
+    for key, val in pairs(FALLBACK) do
+        if clean:find(key) or key:find(clean) then return val end
+    end
     return 0
 end
 
--- ============================================================
---  GUI
--- ============================================================
+-- ── GUI ──────────────────────────────────────────────────────
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MM2ValueCalc"
 ScreenGui.ResetOnSpawn = false
@@ -221,14 +270,13 @@ ScreenGui.DisplayOrder = 998
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 120)
-MainFrame.Position = UDim2.new(0.5, -110, 0.75, -60)
+MainFrame.Size = UDim2.new(0, 220, 0, 110)
+MainFrame.Position = UDim2.new(0.5, -110, 0.75, -55)
 MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
 MainFrame.BorderSizePixel = 0
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.Active = true
 MainFrame.Draggable = true
-MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
 do
@@ -247,106 +295,51 @@ Title.TextSize = 11
 Title.TextColor3 = Color3.fromRGB(200, 180, 255)
 Title.Parent = MainFrame
 
--- Поле для ручного ввода
-local InputBox = Instance.new("TextBox")
-InputBox.Size = UDim2.new(0.7, 0, 0, 20)
-InputBox.Position = UDim2.new(0.02, 0, 0, 22)
-InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-InputBox.BackgroundTransparency = 0.2
-InputBox.Text = ""
-InputBox.PlaceholderText = "Enter item name..."
-InputBox.Font = Enum.Font.SourceSans
-InputBox.TextSize = 11
-InputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-InputBox.ClearTextOnFocus = false
-InputBox.Parent = MainFrame
-
-do
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 4); c.Parent = InputBox
-    local s = Instance.new("UIStroke"); s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    s.Color = Color3.fromRGB(100, 100, 150); s.Thickness = 1; s.Parent = InputBox
-end
-
-local FindBtn = Instance.new("TextButton")
-FindBtn.Size = UDim2.new(0.25, 0, 1, 0)
-FindBtn.Position = UDim2.new(0.73, 0, 0, 0)
-FindBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 140)
-FindBtn.BackgroundTransparency = 0.2
-FindBtn.Text = "Find"
-FindBtn.Font = Enum.Font.FredokaOne
-FindBtn.TextSize = 10
-FindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-FindBtn.Parent = MainFrame
-
-do
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 4); c.Parent = FindBtn
-    local s = Instance.new("UIStroke"); s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    s.Color = Color3.fromRGB(120, 80, 200); s.Thickness = 1; s.Parent = FindBtn
-end
-
--- Результат ручного поиска
-local ManualResult = Instance.new("TextLabel")
-ManualResult.Size = UDim2.new(1, -6, 0, 16)
-ManualResult.Position = UDim2.new(0, 3, 0, 45)
-ManualResult.BackgroundTransparency = 1
-ManualResult.Text = ""
-ManualResult.Font = Enum.Font.SourceSans
-ManualResult.TextSize = 10
-ManualResult.TextColor3 = Color3.fromRGB(200, 200, 200)
-ManualResult.TextXAlignment = Enum.TextXAlignment.Left
-ManualResult.Parent = MainFrame
-
--- Ваш оффер
 local YourLabel = Instance.new("TextLabel")
-YourLabel.Size = UDim2.new(0.48, 0, 0, 16)
-YourLabel.Position = UDim2.new(0, 4, 0, 64)
+YourLabel.Size = UDim2.new(0.48, 0, 0, 18)
+YourLabel.Position = UDim2.new(0, 4, 0, 22)
 YourLabel.BackgroundTransparency = 1
 YourLabel.Text = "You: —"
 YourLabel.Font = Enum.Font.SourceSansBold
-YourLabel.TextSize = 11
+YourLabel.TextSize = 12
 YourLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
 YourLabel.TextXAlignment = Enum.TextXAlignment.Left
 YourLabel.Parent = MainFrame
 
--- Их оффер
 local TheirLabel = Instance.new("TextLabel")
-TheirLabel.Size = UDim2.new(0.48, 0, 0, 16)
-TheirLabel.Position = UDim2.new(0.52, 0, 0, 64)
+TheirLabel.Size = UDim2.new(0.48, 0, 0, 18)
+TheirLabel.Position = UDim2.new(0.52, 0, 0, 22)
 TheirLabel.BackgroundTransparency = 1
 TheirLabel.Text = "Them: —"
 TheirLabel.Font = Enum.Font.SourceSansBold
-TheirLabel.TextSize = 11
+TheirLabel.TextSize = 12
 TheirLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
 TheirLabel.TextXAlignment = Enum.TextXAlignment.Left
 TheirLabel.Parent = MainFrame
 
--- Разница
 local DiffLabel = Instance.new("TextLabel")
-DiffLabel.Size = UDim2.new(1, 0, 0, 16)
-DiffLabel.Position = UDim2.new(0, 0, 0, 84)
+DiffLabel.Size = UDim2.new(1, 0, 0, 18)
+DiffLabel.Position = UDim2.new(0, 0, 0, 44)
 DiffLabel.BackgroundTransparency = 1
 DiffLabel.Text = "Diff: —"
 DiffLabel.Font = Enum.Font.SourceSansBold
-DiffLabel.TextSize = 11
+DiffLabel.TextSize = 12
 DiffLabel.TextColor3 = Color3.fromRGB(180, 255, 180)
 DiffLabel.TextXAlignment = Enum.TextXAlignment.Center
 DiffLabel.Parent = MainFrame
 
--- Статус
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, 0, 0, 14)
-StatusLabel.Position = UDim2.new(0, 0, 0, 104)
+StatusLabel.Position = UDim2.new(0, 0, 0, 66)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Ready | " .. #VALUES .. " items"
+StatusLabel.Text = "Loading..."
 StatusLabel.Font = Enum.Font.SourceSans
 StatusLabel.TextSize = 8
-StatusLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
+StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
 StatusLabel.Parent = MainFrame
 
--- ============================================================
---  ФУНКЦИИ ДЛЯ ЧТЕНИЯ ОФФЕРА
--- ============================================================
+-- ── ЧТЕНИЕ ОФФЕРА ──────────────────────────────────────────
 local function getTradeItems(offerFrameName)
     local items = {}
     local tradeGui = nil
@@ -357,17 +350,13 @@ local function getTradeItems(offerFrameName)
         end
     end
     if not tradeGui or not tradeGui.Enabled then return items end
-
     local container = tradeGui:FindFirstChild("Container")
     if not container or not container.Visible then return items end
-
     local trade = container:FindFirstChild("Trade")
     if not trade or not trade.Visible then return items end
-
     local offerFrame = trade:FindFirstChild(offerFrameName)
     local slotContainer = offerFrame and offerFrame:FindFirstChild("Container")
     if not slotContainer then return items end
-
     for i = 1, 4 do
         local slot = slotContainer:FindFirstChild("NewItem" .. i)
         if slot and slot.Visible then
@@ -423,16 +412,12 @@ local function formatValue(val)
     return tostring(math.floor(val))
 end
 
--- ============================================================
---  ОБНОВЛЕНИЕ
--- ============================================================
+-- ── ОБНОВЛЕНИЕ ──────────────────────────────────────────────
 local function updateValues()
     pcall(function()
         local isFakeActive = _G.fakeTrade and _G.fakeTrade.active
-
         local yourItems = {}
         local theirItems = {}
-
         if isFakeActive and _G.YourSlots and _G.TheirSlots then
             yourItems = getFakeTradeItems(_G.YourSlots)
             theirItems = getFakeTradeItems(_G.TheirSlots)
@@ -440,14 +425,11 @@ local function updateValues()
             yourItems = getTradeItems("YourOffer")
             theirItems = getTradeItems("TheirOffer")
         end
-
         local yourVal = calculateValue(yourItems)
         local theirVal = calculateValue(theirItems)
         local diff = yourVal - theirVal
-
         YourLabel.Text = "You: " .. (yourVal > 0 and formatValue(yourVal) or "—")
         TheirLabel.Text = "Them: " .. (theirVal > 0 and formatValue(theirVal) or "—")
-
         if diff > 0 then
             DiffLabel.Text = "Diff: +" .. formatValue(diff) .. " (you win)"
             DiffLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
@@ -458,47 +440,34 @@ local function updateValues()
             DiffLabel.Text = "Diff: 0 (fair trade)"
             DiffLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         end
-
-        StatusLabel.Text = "Ready | " .. #VALUES .. " items"
     end)
 end
 
--- ============================================================
---  РУЧНОЙ ПОИСК
--- ============================================================
-FindBtn.MouseButton1Click:Connect(function()
-    local name = InputBox.Text
-    if name == "" then
-        ManualResult.Text = "Enter an item name!"
-        ManualResult.TextColor3 = Color3.fromRGB(255, 200, 100)
-        return
-    end
-
-    local value = getItemValue(name)
-    if value > 0 then
-        ManualResult.Text = name .. " = " .. formatValue(value)
-        ManualResult.TextColor3 = Color3.fromRGB(120, 255, 120)
-    else
-        ManualResult.Text = "Item not found: " .. name
-        ManualResult.TextColor3 = Color3.fromRGB(255, 100, 100)
-    end
-end)
-
-InputBox.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        FindBtn.MouseButton1Click:Fire()
-    end
-end)
-
--- ============================================================
---  ЗАПУСК
--- ============================================================
+-- ── ЗАПУСК ──────────────────────────────────────────────────
 task.spawn(function()
     while true do
-        task.wait(3)
+        task.wait(2)
         updateValues()
     end
 end)
 
-updateValues()
-print("[MM2 Value Calculator] Loaded with " .. #VALUES .. " items.")
+task.spawn(function()
+    fetchSupremeValues()
+    updateValues()
+    while true do
+        task.wait(600)
+        fetchSupremeValues()
+    end
+end)
+
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and input.KeyCode == Enum.KeyCode.LeftControl then
+        fetchSupremeValues()
+        updateValues()
+        StatusLabel.Text = "Refreshing..."
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+        task.delay(2, updateValues)
+    end
+end)
+
+print("[MM2 Value Calculator] Loaded. Ctrl+Click to refresh.")
