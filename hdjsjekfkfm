@@ -1,22 +1,28 @@
 -- ============================================================
---  MM2 VALUE CALCULATOR (с правильной выгодой)
---  Все скины + Diff = твоя прибыль
+--  MM2 VALUE CALCULATOR (FINAL)
+--  Все скины + актуальные цены (август 2026)
+--  Profit = Их оффер - Твой оффер (твоя выгода)
 -- ============================================================
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
+-- ============================================================
+--  ПОЛНАЯ БАЗА ЦЕН (ВСЕ СКИНЫ, АКТУАЛЬНЫЕ)
+-- ============================================================
 local VALUES = {
-    -- ANCIENTS
+    -- ====== ANCIENTS ======
     ["gingerscope"] = 18500,
     ["travelersaxe"] = 8100,
     ["celestial"] = 1725,
     ["vampireaxe"] = 925,
     ["harvester"] = 300,
-    ["icepiercer"] = 200,
+    ["icepiercer"] = 120,
+    ["logchopper"] = 165,
+    ["icebreaker"] = 175,
 
-    -- TIER 4
+    -- ====== TIER 4 ======
     ["travelersgun"] = 5600,
     ["evergun"] = 3450,
     ["constellation"] = 2700,
@@ -40,7 +46,7 @@ local VALUES = {
     ["rainbow"] = 410,
     ["bloom"] = 400,
 
-    -- TIER 3
+    -- ====== TIER 3 ======
     ["heartwand"] = 340,
     ["ocean"] = 285,
     ["waves"] = 280,
@@ -65,7 +71,7 @@ local VALUES = {
     ["candy"] = 80,
     ["heartblade"] = 65,
 
-    -- TIER 2
+    -- ====== TIER 2 ======
     ["luger"] = 40,
     ["redluger"] = 37,
     ["phantom"] = 35,
@@ -86,7 +92,7 @@ local VALUES = {
     ["nightblade"] = 20,
     ["shark"] = 20,
 
-    -- TIER 1
+    -- ====== TIER 1 ======
     ["icebeam"] = 18,
     ["plasmabeam"] = 18,
     ["swirlygun"] = 18,
@@ -110,7 +116,7 @@ local VALUES = {
     ["nebula"] = 13,
     ["virtual"] = 13,
 
-    -- TIER 0 + VINTAGE
+    -- ====== VINTAGE / SPECIAL ======
     ["battleaxe"] = 12,
     ["gingermint"] = 12,
     ["swirlyblade"] = 12,
@@ -150,13 +156,8 @@ local VALUES = {
     ["seer"] = 3,
     ["orangeseer"] = 2,
     ["yellowseer"] = 2,
-    ["blue"] = 3,
-    ["orange"] = 2,
-    ["purple"] = 3,
-    ["red"] = 3,
-    ["yellow"] = 2,
 
-    -- CHROMAS
+    -- ====== CHROMAS (АКТУАЛЬНЫЕ ЦЕНЫ) ======
     ["chromatravelersgun"] = 225000,
     ["chromaevergun"] = 78000,
     ["chromaevergreen"] = 60000,
@@ -178,48 +179,53 @@ local VALUES = {
     ["chromaornament"] = 2700,
     ["chromacandleflame"] = 200,
     ["chromacorrupt"] = 180,
-    ["chromadarkbringer"] = 180,
-    ["chromalightbringer"] = 180,
-    ["chromaluger"] = 180,
-    ["chromamakeshift"] = 180,
-    ["chromaeternal"] = 120,
-    ["chromaeternalii"] = 120,
-    ["chromaeternaliii"] = 120,
-    ["chromaeternaliv"] = 120,
-    ["chromafang"] = 120,
-    ["chromagemstone"] = 120,
-    ["chromaghostblade"] = 120,
-    ["chromagreenluger"] = 120,
-    ["chromaheat"] = 120,
-    ["chromalaser"] = 120,
-    ["chromaminty"] = 120,
-    ["chromaoldglory"] = 120,
-    ["chromaphantom"] = 120,
-    ["chromapixel"] = 120,
-    ["chromaplasmablade"] = 120,
-    ["chromaplasmabeam"] = 120,
-    ["chromapumpking"] = 120,
-    ["chromaredluger"] = 120,
-    ["chromaseer"] = 120,
-    ["chromashark"] = 120,
-    ["chromaslasher"] = 120,
-    ["chromaspectre"] = 120,
-    ["chromasugar"] = 120,
-    ["chromatides"] = 120,
-    ["chromaxmas"] = 120,
-
-    -- VINTAGE (дополнительные)
-    ["corrupt"] = 600,
+    ["chromadarkbringer"] = 65,
+    ["chromalightbringer"] = 65,
+    ["chromaluger"] = 65,
+    ["chromamakeshift"] = 65,
+    ["chromaboneblade"] = 25,
+    ["chromadeathshard"] = 25,
+    ["chromaelderwoodblade"] = 25,
+    ["chromafang"] = 25,
+    ["chromagemstone"] = 25,
+    ["chromagingerblade"] = 25,
+    ["chromaheat"] = 25,
+    ["chromalaser"] = 25,
+    ["chromasaw"] = 25,
+    ["chromaseer"] = 25,
+    ["chromashark"] = 25,
+    ["chromaslasher"] = 25,
+    ["chromatides"] = 25,
+    ["chromaeternal"] = 20,
+    ["chromaeternalii"] = 20,
+    ["chromaeternaliii"] = 20,
+    ["chromaeternaliv"] = 20,
+    ["chromaghostblade"] = 20,
+    ["chromagreenluger"] = 20,
+    ["chromaminty"] = 20,
+    ["chromaoldglory"] = 20,
+    ["chromaphantom"] = 20,
+    ["chromapixel"] = 20,
+    ["chromaplasmablade"] = 20,
+    ["chromaplasmabeam"] = 20,
+    ["chromapumpking"] = 20,
+    ["chromaredluger"] = 20,
+    ["chromaspectre"] = 20,
+    ["chromasugar"] = 20,
+    ["chromaxmas"] = 20,
 }
 
+-- ============================================================
+--  ПОИСК ЦЕНЫ
+-- ============================================================
 local function getItemValue(name)
     if not name or name == "" then return 0 end
     local clean = name:lower():gsub("[^a-z0-9]", "")
 
     if VALUES[clean] then return VALUES[clean] end
 
-    if string.sub(clean, 1, 6) == "chroma" then
-        local base = string.sub(clean, 7)
+    if clean:find("chroma") then
+        local base = clean:gsub("chroma", "")
         if VALUES[base] then return VALUES[base] * 2.5 end
     end
 
@@ -230,7 +236,9 @@ local function getItemValue(name)
     return 0
 end
 
--- GUI
+-- ============================================================
+--  GUI
+-- ============================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MM2Values"
 ScreenGui.ResetOnSpawn = false
@@ -300,14 +308,16 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, 0, 0, 12)
 StatusLabel.Position = UDim2.new(0, 0, 0, 54)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Ready"
+StatusLabel.Text = "Ready (" .. #VALUES .. " items)"
 StatusLabel.Font = Enum.Font.SourceSans
 StatusLabel.TextSize = 8
 StatusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
 StatusLabel.Parent = MainFrame
 
--- Функции чтения
+-- ============================================================
+--  ЧТЕНИЕ ОФФЕРА
+-- ============================================================
 local function getTradeItems(side)
     local items = {}
     local tradeGui = nil
@@ -379,7 +389,9 @@ local function fmt(v)
     return tostring(math.floor(v))
 end
 
--- ОБНОВЛЕНИЕ (правильный расчёт выгоды)
+-- ============================================================
+--  ОБНОВЛЕНИЕ (ПРАВИЛЬНАЯ ВЫГОДА)
+-- ============================================================
 local function update()
     pcall(function()
         local isFake = _G.fakeTrade and _G.fakeTrade.active
@@ -395,7 +407,7 @@ local function update()
 
         local yourVal = calcTotal(yourItems)
         local theirVal = calcTotal(theirItems)
-        local profit = theirVal - yourVal  -- ТВОЯ ВЫГОДА
+        local profit = theirVal - yourVal
 
         YourLabel.Text = "You: " .. (yourVal > 0 and fmt(yourVal) or "—")
         TheirLabel.Text = "Them: " .. (theirVal > 0 and fmt(theirVal) or "—")
@@ -413,7 +425,9 @@ local function update()
     end)
 end
 
--- ЗАПУСК
+-- ============================================================
+--  ЗАПУСК
+-- ============================================================
 task.spawn(function()
     while true do
         task.wait(2)
